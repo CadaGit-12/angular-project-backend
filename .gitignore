@@ -1,2 +1,13 @@
-#ignore credentials folder
+# Ignore credentials folder
 credentials/
+
+# Ignore PyCache
+__pycache__/
+*.py[cod]
+
+# Ignore Virtual Environments
+venv/
+env/
+
+# Ignore Environment Files
+*.env
