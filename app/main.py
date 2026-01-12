@@ -1,0 +1,175 @@
+"""
+Angular Sheets Dashboard Backend
+Fetches data from Google Sheets and serves it via FastAPI endpoints.
+
+
+Run the app with: uvicorn main:app --reload
+"""
+
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+import pandas as pd
+from fastapi import FastAPI
+
+
+# Debug mode - set to False to disable debug print statements
+debug = True
+
+
+# =====================================================
+# Google Sheets API Configuration
+# =====================================================
+
+# API scopes - read-only access to spreadsheets
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+# Path to service account credentials file
+SERVICE_ACCOUNT_FILE = "credentials\\angular-sheets-dashboard-botc-b3a8499ad734.json"
+
+# ID of the target Google Spreadsheet
+SPREADSHEET_ID = "1puAH0mkBse1TjuZBHcY2kAjPpymOKNbLqkDmVhnJ4qA"
+
+
+# Initialize Google Sheets API service
+try:
+    # Load credentials from service account file
+    creds = Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    if debug:
+        print(f"DEBUG: Authenticated as {creds.service_account_email}")
+    
+    # Build the Google Sheets API service
+    service = build("sheets", "v4", credentials=creds)
+    if debug:
+        print("DEBUG: Google Sheets API service initialized successfully")
+        
+except FileNotFoundError as e:
+    print(f"ERROR: Credentials file not found - {SERVICE_ACCOUNT_FILE}")
+    raise
+except Exception as e:
+    print(f"ERROR: Failed to initialize Google Sheets API - {str(e)}")
+    raise
+
+
+# =====================================================
+# Helper Functions - Google Sheets Data Fetching
+# =====================================================
+
+def fetch_sheet(title):
+    """
+    Fetch data from a specific sheet in the Google Spreadsheet.
+    
+    Args:
+        title (str): The name/title of the sheet to fetch
+        
+    Returns:
+        list: 2D list of values from the sheet, or empty list if no data
+        
+    Raises:
+        Exception: If the API request fails
+    """
+    try:
+        result = service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=title
+        ).execute()
+        
+        values = result.get("values", [])
+        if debug:
+            print(f"DEBUG: Successfully fetched sheet '{title}' - {len(values)} rows")
+        
+        return values
+        
+    except Exception as e:
+        print(f"ERROR: Failed to fetch sheet '{title}' - {str(e)}")
+        raise
+
+
+# =====================================================
+# FastAPI Application & Endpoints
+# =====================================================
+
+# Initialize FastAPI application
+app = FastAPI()
+
+
+@app.get("/")
+def health():
+    """
+    Health check endpoint to verify the API is running.
+    
+    Returns:
+        dict: Status indicator
+    """
+    if debug:
+        print("DEBUG: Health check endpoint called")
+    return {"status": "ok"}
+
+
+@app.get("/sheets")
+def get_all_sheets():
+    """
+    Fetch all sheets from the Google Spreadsheet and return their data.
+    Retrieves metadata to identify all sheets, then fetches data from each.
+    
+    Returns:
+        dict: Dictionary with sheet titles as keys and their data as values
+        
+    Raises:
+        Exception: If metadata retrieval or data fetching fails
+    """
+    try:
+        if debug:
+            print("DEBUG: Fetching all sheets data")
+        
+        # Fetch spreadsheet metadata to get list of all sheets
+        try:
+            metadata = service.spreadsheets().get(
+                spreadsheetId=SPREADSHEET_ID
+            ).execute()
+            if debug:
+                print("DEBUG: Successfully retrieved spreadsheet metadata")
+                
+        except Exception as e:
+            print(f"ERROR: Failed to retrieve spreadsheet metadata - {str(e)}")
+            raise
+        
+        # Extract sheet information (title and ID)
+        sheets = metadata.get("sheets", [])
+        sheet_info = [
+            {
+                "title": s["properties"]["title"],
+                "sheetId": s["properties"]["sheetId"]
+            }
+            for s in sheets
+        ]
+        
+        if debug:
+            print(f"DEBUG: Found {len(sheet_info)} sheets: {[s['title'] for s in sheet_info]}")
+        
+        # Fetch data from each sheet
+        all_data = {}
+        for sheet in sheet_info:
+            try:
+                all_data[sheet["title"]] = fetch_sheet(sheet["title"])
+            except Exception as e:
+                print(f"ERROR: Skipping sheet '{sheet['title']}' due to fetch error - {str(e)}")
+                all_data[sheet["title"]] = []
+        
+        if debug:
+            print(f"DEBUG: Successfully fetched data from all {len(all_data)} sheets")
+        
+        return all_data
+        
+    except Exception as e:
+        print(f"ERROR: Failed to fetch all sheets - {str(e)}")
+        raise
+
+
+
+
+
+
+
+
