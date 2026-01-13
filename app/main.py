@@ -10,7 +10,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import pandas as pd
 from fastapi import FastAPI
-
+import os
+import json
 
 # Debug mode - set to False to disable debug print statements
 debug = True
@@ -23,18 +24,21 @@ debug = True
 # API scopes - read-only access to spreadsheets
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-# Path to service account credentials file
-SERVICE_ACCOUNT_FILE = "credentials\\angular-sheets-dashboard-botc-b3a8499ad734.json"
 
 # ID of the target Google Spreadsheet
 SPREADSHEET_ID = "1puAH0mkBse1TjuZBHcY2kAjPpymOKNbLqkDmVhnJ4qA"
 
-
 # Initialize Google Sheets API service
 try:
+    creds_json = os.environ.get("GOOGLE_CREDS")
+    if not creds_json:
+        raise RuntimeError("GOOGLE_CREDS environment variable not set")
+    creds_dict = json.loads(creds_json)
+
     # Load credentials from service account file
-    creds = Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    creds = Credentials.from_service_account_info(
+        creds_dict, 
+        scopes=SCOPES
     )
     if debug:
         print(f"DEBUG: Authenticated as {creds.service_account_email}")
@@ -43,10 +47,6 @@ try:
     service = build("sheets", "v4", credentials=creds)
     if debug:
         print("DEBUG: Google Sheets API service initialized successfully")
-        
-except FileNotFoundError as e:
-    print(f"ERROR: Credentials file not found - {SERVICE_ACCOUNT_FILE}")
-    raise
 except Exception as e:
     print(f"ERROR: Failed to initialize Google Sheets API - {str(e)}")
     raise
