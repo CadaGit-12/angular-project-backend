@@ -12,6 +12,7 @@ import pandas as pd
 from fastapi import FastAPI
 import os
 import json
+from fastapi.middleware.cors import CORSMiddleware
 
 # Debug mode - set to False to disable debug print statements
 debug = True
@@ -93,6 +94,16 @@ def fetch_sheet(title):
 # Initialize FastAPI application
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",
+        "https://sheets-dashboard-angular.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def health():
