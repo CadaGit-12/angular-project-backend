@@ -59,7 +59,7 @@ except Exception as e:
 def get_role_map():
 
     try:
-        ROLE_MAP = pd.read_csv("roles.csv").set_index("role")["team"].to_dict()
+        ROLE_MAP = pd.read_csv("app/roles.csv").set_index("role")["team"].to_dict()
         if debug:
             print(f"DEBUG: Loaded role map from roles.csv - {ROLE_MAP}")
     except Exception as e:
