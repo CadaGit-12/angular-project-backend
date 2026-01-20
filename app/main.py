@@ -13,6 +13,7 @@ from fastapi import FastAPI
 import os
 import json
 from fastapi.middleware.cors import CORSMiddleware
+import re
 
 # Debug mode - set to False to disable debug print statements
 debug = True
@@ -52,6 +53,22 @@ except Exception as e:
     print(f"ERROR: Failed to initialize Google Sheets API - {str(e)}")
     raise
 
+# ====================================================
+# Fetch Role Map
+# ====================================================
+def get_role_map():
+
+    try:
+        ROLE_MAP = pd.read_csv("roles.csv").set_index("role")["team"].to_dict()
+        if debug:
+            print(f"DEBUG: Loaded role map from roles.csv - {ROLE_MAP}")
+    except Exception as e:
+        print(f"ERROR: Failed to load role map from roles.csv - {str(e)}")
+        ROLE_MAP = {}
+
+    return ROLE_MAP
+
+
 
 # =====================================================
 # Helper Functions - Google Sheets Data Fetching
@@ -85,6 +102,35 @@ def fetch_sheet(title):
     except Exception as e:
         print(f"ERROR: Failed to fetch sheet '{title}' - {str(e)}")
         raise
+
+def sheet_to_df(values):
+    """
+    Convert raw Google Sheets values into a cleaned Pandas DataFrame.
+    Assumes:
+    A = date
+    B = role
+    C = win (1/0)
+    D = winrate (ignored)
+    """
+    if not values or len(values) < 2:
+        return pd.DataFrame(columns=["date", "role", "win"])
+
+    # First row is header (but we ignore Google's headers anyway)
+    rows = values[1:]
+
+    df = pd.DataFrame(rows, columns=["date", "role", "win", "winrate"])
+
+    # Omit Winrate column
+    df = df[["date", "role", "win"]]
+
+    # Clean types
+    df["win"] = pd.to_numeric(df["win"], errors="coerce")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    # Drop rows where the player didn't play
+    df = df.dropna(subset=["role", "win"])
+
+    return df
 
 
 # =====================================================
@@ -161,11 +207,34 @@ def get_all_sheets():
         
         # Fetch data from each sheet
         all_data = {}
+        
         for sheet in sheet_info:
             try:
-                all_data[sheet["title"]] = fetch_sheet(sheet["title"])
+                raw_data = fetch_sheet(sheet["title"])
+                df = sheet_to_df(raw_data)
+
+                # ---- Calculations ----
+                games_played = len(df)
+                overall_winrate = df["win"].mean() if games_played > 0 else 0
+
+                winrate_by_role = (
+                    df.groupby("role")["win"]
+                    .agg(games="count", winrate="mean")
+                    .reset_index()
+                )
+
+                # ---- Build response ----
+                all_data[sheet["title"]] = {
+                    "summary": {
+                        "games_played": games_played,
+                        "overall_winrate": round(overall_winrate, 3)
+                    },
+                    "by_role": winrate_by_role.to_dict(orient="records"),
+                    "log": df.to_dict(orient="records")
+                }
+
             except Exception as e:
-                print(f"ERROR: Skipping sheet '{sheet['title']}' due to fetch error - {str(e)}")
+                print(f"ERROR: Skipping sheet '{sheet['title']}' due to error - {str(e)}")
                 all_data[sheet["title"]] = []
         
         if debug:
