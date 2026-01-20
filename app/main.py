@@ -57,16 +57,23 @@ except Exception as e:
 # Fetch Role Map
 # ====================================================
 def get_role_map():
-
     try:
-        ROLE_MAP = pd.read_csv("app/roles.csv").set_index("role")["team"].to_dict()
-        if debug:
-            print(f"DEBUG: Loaded role map from roles.csv - {ROLE_MAP}")
-    except Exception as e:
-        print(f"ERROR: Failed to load role map from roles.csv - {str(e)}")
-        ROLE_MAP = {}
+        role_meta = (
+            pd.read_csv("app/roles.csv")
+            .rename(columns=lambda c: c.strip().lower())
+            .assign(role=lambda df: df["role"].str.strip().str.lower())
+            .set_index("role")
+        )
 
-    return ROLE_MAP
+        if debug:
+            print("DEBUG: Loaded role metadata")
+            print(role_meta.head())
+
+        return role_meta
+
+    except Exception as e:
+        print(f"ERROR: Failed to load role metadata - {str(e)}")
+        return pd.DataFrame(columns=["category", "team"])
 
 ROLE_MAP = get_role_map()
 
