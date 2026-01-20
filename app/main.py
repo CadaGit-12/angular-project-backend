@@ -68,7 +68,16 @@ def get_role_map():
 
     return ROLE_MAP
 
+ROLE_MAP = get_role_map()
 
+# ====================================================
+# Fetch Role Map
+# ====================================================
+EVIL_OVERRIDE_NOTES = {
+    "turned evil",
+    "evil",
+    "evil team"
+}
 
 # =====================================================
 # Helper Functions - Google Sheets Data Fetching
@@ -132,6 +141,26 @@ def sheet_to_df(values):
 
     return df
 
+def parse_role(role_raw: str):
+    """
+    Extract base role name and optional note from a role string.
+
+    Examples:
+    "seamstress (drunk)" -> ("seamstress", "drunk")
+    "assassin"          -> ("assassin", None)
+    """
+    if not isinstance(role_raw, str):
+        return None, None
+
+    match = re.match(r"^([^(]+?)(?:\s*\((.*?)\))?$", role_raw.strip())
+
+    if not match:
+        return role_raw.strip(), None
+
+    role = match.group(1).strip()
+    note = match.group(2)
+
+    return role, note
 
 # =====================================================
 # FastAPI Application & Endpoints
@@ -217,19 +246,65 @@ def get_all_sheets():
                 games_played = len(df)
                 overall_winrate = df["win"].mean() if games_played > 0 else 0
 
-                winrate_by_role = (
-                    df.groupby("role")["win"]
+                # Extract base role + notes
+                df[["role_clean", "role_note"]] = df["role"].apply(
+                    lambda r: pd.Series(parse_role(r))
+                )
+
+                # Normalize role notes for logic
+                df["role_note_norm"] = (
+                    df["role_note"]
+                    .astype(str)
+                    .str.lower()
+                    .str.strip()
+                )
+
+                # Map category & team
+                df["category"] = df["role_clean"].map(ROLE_MAP["category"])
+                df["team"] = df["role_clean"].map(ROLE_MAP["team"])
+
+                df.loc[
+                    df["role_note_norm"].isin(EVIL_OVERRIDE_NOTES),
+                    "team"
+                ] = "Evil"
+
+                # Calculate winrate by role, team and category
+                by_role = (
+                    df.groupby("role_clean")["win"]
+                    .agg(games="count", winrate="mean")
+                    .reset_index()
+                    .rename(columns={"role_clean": "role"})
+                )
+                by_team = (
+                    df.groupby("team")["win"]
                     .agg(games="count", winrate="mean")
                     .reset_index()
                 )
 
-                # ---- Build response ----
+                by_category = (
+                    df.groupby("category")["win"]
+                    .agg(games="count", winrate="mean")
+                    .reset_index()
+                )
+                
+                # Clean Game History for Output
+                log = df[[
+                    "date",
+                    "role_clean",
+                    "role_note",
+                    "category",
+                    "team",
+                    "win"
+                ]].rename(columns={"role_clean": "role"})
+
+                
+                # ---- Build Final response ----
                 all_data[sheet["title"]] = {
                     "summary": {
                         "games_played": games_played,
                         "overall_winrate": round(overall_winrate, 3)
                     },
-                    "by_role": winrate_by_role.to_dict(orient="records"),
+                    
                     "log": df.to_dict(orient="records")
                 }
 
