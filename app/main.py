@@ -6,6 +6,7 @@ Fetches data from Google Sheets and serves it via FastAPI endpoints.
 Run the app with: uvicorn main:app --reload
 """
 
+from http.client import HTTPException
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import pandas as pd
@@ -200,7 +201,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/sheets")
+@app.get("/sheets/metadata")
 def get_all_sheets():
     """
     Fetch all sheets from the Google Spreadsheet and return their data.
@@ -240,96 +241,102 @@ def get_all_sheets():
         
         if debug:
             print(f"DEBUG: Found {len(sheet_info)} sheets: {[s['title'] for s in sheet_info]}")
-        
-        # Fetch data from each sheet
-        all_data = {}
-        
-        for sheet in sheet_info:
-            try:
-                raw_data = fetch_sheet(sheet["title"])
-                df = sheet_to_df(raw_data)
-
-                # ---- Calculations ----
-                games_played = len(df)
-                overall_winrate = df["win"].mean() if games_played > 0 else 0
-
-                # Extract base role + notes
-                df[["role_clean", "role_note"]] = df["role"].apply(
-                    lambda r: pd.Series(parse_role(r))
-                )
-
-                # Normalize role notes for logic
-                df["role_note_norm"] = (
-                    df["role_note"]
-                    .astype(str)
-                    .str.lower()
-                    .str.strip()
-                )
-
-                # Map category & team
-                df["category"] = df["role_clean"].map(ROLE_MAP["category"])
-                df["team"] = df["role_clean"].map(ROLE_MAP["team"])
-
-                df.loc[
-                    df["role_note_norm"].isin(EVIL_OVERRIDE_NOTES),
-                    "team"
-                ] = "Evil"
-
-                # Calculate winrate by role, team and category
-                by_role = (
-                    df.groupby("role_clean")["win"]
-                    .agg(games="count", winrate="mean")
-                    .reset_index()
-                    .rename(columns={"role_clean": "role"})
-                )
-                by_team = (
-                    df.groupby("team")["win"]
-                    .agg(games="count", winrate="mean")
-                    .reset_index()
-                )
-
-                by_category = (
-                    df.groupby("category")["win"]
-                    .agg(games="count", winrate="mean")
-                    .reset_index()
-                )
-                
-                # Clean Game History for Output
-                log = df[[
-                    "date",
-                    "role_clean",
-                    "role_note",
-                    "category",
-                    "team",
-                    "win"
-                ]].rename(columns={"role_clean": "role"})
-
-                df = df.fillna("")  # Replace NaNs for JSON serialization
-
-                # ---- Build Final response ----
-                all_data[sheet["title"]] = {
-                    "summary": {
-                        "games_played": games_played,
-                        "overall_winrate": round(overall_winrate, 3)
-                    },
-                    
-                    "log": df.to_dict(orient="records")
-                }
-
-                
-            except Exception as e:
-                print(f"ERROR: Skipping sheet '{sheet['title']}' due to error - {str(e)}")
-                all_data[sheet["title"]] = []
-        
-        if debug:
-            print(f"DEBUG: Successfully fetched data from all {len(all_data)} sheets")
-        
-
-        return all_data
+        return sheet_info
         
     except Exception as e:
         print(f"ERROR: Failed to fetch all sheets - {str(e)}")
         raise
+    
+@app.get("/sheets/{sheet_title}")
+def get_player_data(sheet_title: str):
+        # Fetch data from each sheet
+
+        try:
+            # Fetch sheet data
+            raw_data = fetch_sheet(sheet_title)
+            df = sheet_to_df(raw_data)
+
+            # Calculations
+            games_played = len(df)
+            overall_winrate = df["win"].mean() if games_played > 0 else 0
+
+            # Extract base role + notes
+            df[["role_clean", "role_note"]] = df["role"].apply(
+                lambda r: pd.Series(parse_role(r))
+            )
+
+            # Normalize role notes for logic
+            df["role_note_norm"] = (
+                df["role_note"]
+                .astype(str)
+                .str.lower()
+                .str.strip()
+            )
+
+            # Map category & team
+            df["category"] = df["role_clean"].map(ROLE_MAP["category"])
+            df["team"] = df["role_clean"].map(ROLE_MAP["team"])
+
+            # Override team to "Evil" if role note indicates so
+            df.loc[
+                df["role_note_norm"].isin(EVIL_OVERRIDE_NOTES),
+                "team"
+            ] = "Evil"
+
+            # Calculate winrate by role, team and category
+            by_role = (
+                df.groupby("role_clean")["win"]
+                .agg(games="count", winrate="mean")
+                .reset_index()
+                .rename(columns={"role_clean": "role"})
+            )
+            by_team = (
+                df.groupby("team")["win"]
+                .agg(games="count", winrate="mean")
+                .reset_index()
+            )
+
+            by_category = (
+                df.groupby("category")["win"]
+                .agg(games="count", winrate="mean")
+                .reset_index()
+            )
+            
+            # Clean Game History for Output
+            log = df[[
+                "date",
+                "role_clean",
+                "role_note",
+                "category",
+                "team",
+                "win"
+            ]].rename(columns={"role_clean": "role"})
+
+            df = df.fillna("")  # Replace NaNs for JSON serialization
+
+            # ---- Build Final response ----
+            response = {
+                "summary": {
+                    "games_played": games_played,
+                    "overall_winrate": round(overall_winrate, 3)
+                },
+                "by_role": by_role.to_dict(orient="records"),
+                "by_category": by_category.to_dict(orient="records"),
+                "by_team": by_team.to_dict(orient="records"),
+                "log": df.to_dict(orient="records")
+            }
+        
+            if debug:
+                print(f"DEBUG: Successfully fetched data from sheet {sheet_title}")
+
+            return response
+        
+        except Exception as e:
+            print(f"ERROR: Failed to fetch data from sheet '{sheet_title}' - {str(e)}")
+            raise HTTPException(status_code=404, detail="Sheet not found or unreadable")
+    
+        
+    
 
 
 
