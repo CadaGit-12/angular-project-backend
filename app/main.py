@@ -315,6 +315,8 @@ def get_all_sheets():
                     "log": df.to_dict(orient="records")
                 }
 
+                df = df.fillna("")  # Replace NaNs for JSON serialization
+
             except Exception as e:
                 print(f"ERROR: Skipping sheet '{sheet['title']}' due to error - {str(e)}")
                 all_data[sheet["title"]] = []
@@ -322,6 +324,7 @@ def get_all_sheets():
         if debug:
             print(f"DEBUG: Successfully fetched data from all {len(all_data)} sheets")
         
+
         return all_data
         
     except Exception as e:
