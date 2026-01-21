@@ -177,6 +177,7 @@ def parse_role(role_raw: str):
 # Initialize FastAPI application
 app = FastAPI()
 
+# This is the CORS Security Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -188,6 +189,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health Check Endpoint
 @app.get("/")
 def health():
     """
@@ -200,7 +202,7 @@ def health():
         print("DEBUG: Health check endpoint called")
     return {"status": "ok"}
 
-
+# Startup Endpoint to fetch all sheets metadata
 @app.get("/metadata")
 def get_all_sheets():
     """
@@ -246,7 +248,8 @@ def get_all_sheets():
     except Exception as e:
         print(f"ERROR: Failed to fetch all sheets - {str(e)}")
         raise
-    
+
+# Endpoint to fetch data from a specific sheet  
 @app.get("/sheets/{sheet_title}")
 def get_player_data(sheet_title: str):
         # Fetch data from each sheet
