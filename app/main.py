@@ -6,11 +6,10 @@ Fetches data from Google Sheets and serves it via FastAPI endpoints.
 Run the app with: uvicorn main:app --reload
 """
 
-from http.client import HTTPException
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import os
 import json
 from fastapi.middleware.cors import CORSMiddleware
@@ -280,12 +279,12 @@ def get_player_data(sheet_title: str):
             )
 
             # Map category & team
-            df["category"] = df["role_clean"].map(ROLE_MAP["category"])
-            df["team"] = df["role_clean"].map(ROLE_MAP["team"])
+            df["category"] = df["role_key"].map(ROLE_MAP["category"])
+            df["team"] = df["role_key"].map(ROLE_MAP["team"])
             
             # Debug: Check for missing roles in ROLE_MAP
             if debug:
-                missing_roles = df[df["category"].isna()]["role_clean"].unique()
+                missing_roles = df.loc[df["category"].isna(), "role_clean"].unique()
                 if len(missing_roles):
                     print("DEBUG: Roles missing from ROLE_MAP:", missing_roles)
 
