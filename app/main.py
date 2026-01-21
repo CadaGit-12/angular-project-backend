@@ -268,6 +268,9 @@ def get_player_data(sheet_title: str):
                 lambda r: pd.Series(parse_role(r))
             )
 
+            # Normalize role key for mapping
+            df["role_key"] = df["role_clean"].str.strip().str.lower()
+            
             # Normalize role notes for logic
             df["role_note_norm"] = (
                 df["role_note"]
@@ -275,11 +278,17 @@ def get_player_data(sheet_title: str):
                 .str.lower()
                 .str.strip()
             )
+            
+            # Debug: Check for missing roles in ROLE_MAP
+            if debug:
+                missing_roles = df[df["category"].isna()]["role_clean"].unique()
+                if len(missing_roles):
+                    print("DEBUG: Roles missing from ROLE_MAP:", missing_roles)
 
             # Map category & team
             df["category"] = df["role_clean"].map(ROLE_MAP["category"])
             df["team"] = df["role_clean"].map(ROLE_MAP["team"])
-
+            
             # Override team to "Evil" if role note indicates so
             df.loc[
                 df["role_note_norm"].isin(EVIL_OVERRIDE_NOTES),
@@ -315,7 +324,7 @@ def get_player_data(sheet_title: str):
                 "win"
             ]].rename(columns={"role_clean": "role"})
 
-            df = df.fillna("")  # Replace NaNs for JSON serialization
+            log = log.fillna("")  # Replace NaNs for JSON serialization
 
             # ---- Build Final response ----
             response = {
