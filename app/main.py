@@ -201,7 +201,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/sheets/metadata")
+@app.get("/metadata")
 def get_all_sheets():
     """
     Fetch all sheets from the Google Spreadsheet and return their data.
