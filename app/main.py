@@ -304,7 +304,8 @@ def get_all_sheets():
                     "win"
                 ]].rename(columns={"role_clean": "role"})
 
-                
+                df = df.fillna("")  # Replace NaNs for JSON serialization
+
                 # ---- Build Final response ----
                 all_data[sheet["title"]] = {
                     "summary": {
@@ -315,8 +316,7 @@ def get_all_sheets():
                     "log": df.to_dict(orient="records")
                 }
 
-                df = df.fillna("")  # Replace NaNs for JSON serialization
-
+                
             except Exception as e:
                 print(f"ERROR: Skipping sheet '{sheet['title']}' due to error - {str(e)}")
                 all_data[sheet["title"]] = []
