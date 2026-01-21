@@ -14,6 +14,7 @@ import os
 import json
 from fastapi.middleware.cors import CORSMiddleware
 import re
+import math
 
 # Debug mode - set to False to disable debug print statements
 debug = True
@@ -168,6 +169,24 @@ def parse_role(role_raw: str):
     note = match.group(2)
 
     return role, note
+
+def sanitize(obj):
+    """
+    Recursively sanitize an object by replacing NaN float values with None.
+    Args:
+        obj: The object to sanitize (can be a float, dict, list, etc.)
+    Returns:
+        The sanitized object with NaNs replaced by None.
+    """
+
+    if isinstance(obj, float):
+        return None if math.isnan(obj) else obj
+    elif isinstance(obj, dict):
+        return {k: sanitize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize(v) for v in obj]
+    else:
+        return obj
 
 # =====================================================
 # FastAPI Application & Endpoints
@@ -337,7 +356,9 @@ def get_player_data(sheet_title: str):
                 "by_team": by_team.to_dict(orient="records"),
                 "log": df.to_dict(orient="records")
             }
-        
+
+            response = sanitize(response)
+
             if debug:
                 print(f"DEBUG: Successfully fetched data from sheet {sheet_title}")
 
