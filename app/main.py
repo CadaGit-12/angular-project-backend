@@ -278,6 +278,10 @@ def get_player_data(sheet_title: str):
                 .str.lower()
                 .str.strip()
             )
+
+            # Map category & team
+            df["category"] = df["role_clean"].map(ROLE_MAP["category"])
+            df["team"] = df["role_clean"].map(ROLE_MAP["team"])
             
             # Debug: Check for missing roles in ROLE_MAP
             if debug:
@@ -285,10 +289,7 @@ def get_player_data(sheet_title: str):
                 if len(missing_roles):
                     print("DEBUG: Roles missing from ROLE_MAP:", missing_roles)
 
-            # Map category & team
-            df["category"] = df["role_clean"].map(ROLE_MAP["category"])
-            df["team"] = df["role_clean"].map(ROLE_MAP["team"])
-            
+
             # Override team to "Evil" if role note indicates so
             df.loc[
                 df["role_note_norm"].isin(EVIL_OVERRIDE_NOTES),
