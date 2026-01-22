@@ -321,6 +321,12 @@ def get_player_data(sheet_title: str):
                 .reset_index()
                 .rename(columns={"role_clean": "role"})
             )
+            # Add category field for frontend
+            by_role = by_role.merge(
+                df[["role_clean", "category"]].drop_duplicates().rename(columns={"role_clean": "role"}),
+                on="role",
+                how="left"
+            )
             by_team = (
                 df.groupby("team")["win"]
                 .agg(games="count", winrate="mean")
