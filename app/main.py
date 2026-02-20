@@ -349,6 +349,9 @@ def get_player_data(sheet_title: str):
                 "win"
             ]].rename(columns={"role_clean": "role"})
 
+            # Sort by date descending so newest entries appear first
+            log = log.sort_values("date", ascending=False).reset_index(drop=True)
+
             log = log.fillna("")  # Replace NaNs for JSON serialization
 
             # ---- Build Final response ----
@@ -360,7 +363,7 @@ def get_player_data(sheet_title: str):
                 "by_role": by_role.to_dict(orient="records"),
                 "by_category": by_category.to_dict(orient="records"),
                 "by_team": by_team.to_dict(orient="records"),
-                "log": df.to_dict(orient="records")
+                "log": log.to_dict(orient="records")
             }
 
             response = sanitize(response)
